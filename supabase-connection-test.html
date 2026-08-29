@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Supabase Connection Test</title>
+<style>body{font-family:Arial,sans-serif;background:#f3f6fb;margin:0;padding:30px;color:#172033}.card{max-width:650px;margin:auto;background:#fff;padding:24px;border-radius:16px;box-shadow:0 4px 18px #0001}h1{margin-top:0}.status{padding:14px;border-radius:10px;background:#f1f5f9}.ok{background:#f0fdf4;color:#166534}.bad{background:#fef2f2;color:#991b1b}button{padding:11px 16px;border:0;border-radius:9px;background:#003580;color:white;font-weight:700;cursor:pointer}</style>
+</head>
+<body><div class="card"><h1>☁️ Supabase Connection Test</h1><p>This page tests the public browser connection only. It does not modify school data.</p><div id="status" class="status">Testing connection…</div><p><button onclick="testConnection()">Test Again</button></p></div>
+<script src="supabase-config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+async function testConnection(){
+ const box=document.getElementById('status'); box.className='status'; box.textContent='Testing connection…';
+ try{
+   const {createClient}=window.supabase;
+   const client=createClient(window.SUPABASE_CONFIG.url,window.SUPABASE_CONFIG.publishableKey);
+   const {data,error}=await client.from('schools').select('id').limit(1);
+   if(error) throw error;
+   box.className='status ok'; box.textContent='✅ Connected to Supabase successfully. No school data was changed.';
+ }catch(e){
+   box.className='status bad'; box.textContent='❌ Connection test failed: '+(e.message||e);
+ }
+}
+testConnection();
+</script></body></html>
