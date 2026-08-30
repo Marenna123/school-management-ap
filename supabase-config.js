@@ -34,3 +34,16 @@ window.SUPABASE_CONFIG = {
     return client;
   };
 })();
+
+// School Management V2 uses the tested branding module without changing the existing page structure.
+if (location.pathname.endsWith('school-management-v2.html')) {
+  const loadBranding = () => {
+    if (document.querySelector('script[data-school-branding]')) return;
+    const script = document.createElement('script');
+    script.src = 'school-branding.js';
+    script.dataset.schoolBranding = 'true';
+    document.head.appendChild(script);
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', loadBranding);
+  else loadBranding();
+}
