@@ -46,15 +46,32 @@ if (location.pathname.endsWith('school-management-v2.html')) {
   else loadBranding();
 }
 
+// Live V2 cloud attendance. The V2 page already contains the Attendance tab,
+// so load the dedicated V2 module there and replace only that section.
+if (location.pathname.endsWith('school-management-v2.html')) {
+  const loadV2Attendance = () => {
+    if (!document.getElementById('attendance')) return;
+    if (document.querySelector('script[data-v2-cloud-attendance]')) return;
+    const script = document.createElement('script');
+    script.src = 'attendance-v2-cloud.js?v=20260830';
+    script.dataset.v2CloudAttendance = 'true';
+    document.head.appendChild(script);
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', loadV2Attendance);
+  else loadV2Attendance();
+}
+
 // School Management Cloud attendance.
 // Load by cache-busted URL and whenever the page actually contains the attendance section.
-const loadCloudAttendance = () => {
-  if (!document.getElementById('attendance')) return;
-  if (document.querySelector('script[data-cloud-attendance]')) return;
-  const script = document.createElement('script');
-  script.src = 'attendance-cloud.js?v=20260830';
-  script.dataset.cloudAttendance = 'true';
-  document.head.appendChild(script);
-};
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', loadCloudAttendance);
-else loadCloudAttendance();
+if (location.pathname.endsWith('school-cloud.html')) {
+  const loadCloudAttendance = () => {
+    if (!document.getElementById('attendance')) return;
+    if (document.querySelector('script[data-cloud-attendance]')) return;
+    const script = document.createElement('script');
+    script.src = 'attendance-cloud.js?v=20260830';
+    script.dataset.cloudAttendance = 'true';
+    document.head.appendChild(script);
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', loadCloudAttendance);
+  else loadCloudAttendance();
+}
