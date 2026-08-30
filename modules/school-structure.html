@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>School Structure</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f3f6fb;color:#172033}header{background:#003580;color:#fff;padding:18px;text-align:center}header h1{margin:0;font-size:23px}header p{margin:6px 0 0}.wrap{max-width:1050px;margin:auto;padding:15px}.card{background:#fff;border:1px solid #dbe3ef;border-radius:14px;padding:16px;margin-bottom:13px}.row{display:flex;gap:9px;align-items:end;flex-wrap:wrap}.field{flex:1;min-width:180px}.field label{display:block;font-size:12px;font-weight:700;margin-bottom:5px;color:#475569}.field input{width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px}.btn{border:1px solid #cbd5e1;border-radius:9px;padding:10px 13px;background:#fff;font-weight:700;cursor:pointer}.primary{background:#003580;color:#fff;border-color:#003580}.green{background:#15803d;color:#fff;border-color:#15803d}.orange{background:#ea580c;color:#fff;border-color:#ea580c}.muted{font-size:12px;color:#64748b}.logo-box{display:flex;gap:15px;align-items:center;flex-wrap:wrap}.logo-preview{width:100px;height:100px;object-fit:contain;border:1px dashed #94a3b8;border-radius:10px;background:#fff;display:none}.table{width:100%;border-collapse:collapse;margin-top:10px}.table th,.table td{padding:9px;border-bottom:1px solid #dbe3ef;text-align:left}.table th{background:#eaf1ff;color:#003580}.status{padding:10px;border-radius:9px;background:#f8fafc;margin-top:10px}@media(max-width:650px){.field{min-width:140px}}
+</style>
+</head>
+<body>
+<header><h1 id="title">🏫 School Structure</h1><p id="subtitle">Configure your school's identity and academic structure</p></header>
+<main class="wrap">
+<div id="message" class="status muted">Checking your session…</div>
+<section class="card">
+<h2>School Details</h2>
+<div class="row"><div class="field"><label>School name *</label><input id="schoolName" placeholder="Enter school name"></div><div class="field"><label>Address</label><input id="schoolAddress" placeholder="School address"></div><div class="field"><label>Academic year *</label><input id="schoolYear" placeholder="2026–27"></div></div>
+<div class="logo-box" style="margin-top:14px"><div><b>School Logo</b><p class="muted">Choose PNG, JPG or WebP. It will be optimized to 100 KB or less.</p><input id="logoFile" type="file" accept="image/png,image/jpeg,image/webp"><div id="logoStatus" class="muted" style="margin-top:6px"></div></div><img id="logoPreview" class="logo-preview" alt="School logo preview"></div>
+<div style="margin-top:14px"><button class="btn primary" id="saveBtn">Save School Details</button></div>
+</section>
+<section class="card"><h2>Classes</h2><div class="row"><div class="field"><label>Class name</label><input id="className" placeholder="Nursery / Class 1"></div><button class="btn orange" id="addClass">+ Add Class</button></div><div id="classList"></div></section>
+<section class="card"><h2>Sections</h2><div class="row"><div class="field"><label>Class</label><select id="sectionClass"></select></div><div class="field"><label>Section name</label><input id="sectionName" placeholder="A"></div><button class="btn green" id="addSection">+ Add Section</button></div><div id="sectionList"></div></section>
+<section class="card"><h2>Subjects</h2><div class="row"><div class="field"><label>Class</label><select id="subjectClass"></select></div><div class="field"><label>Subject name</label><input id="subjectName" placeholder="English"></div><button class="btn green" id="addSubject">+ Add Subject</button></div><div id="subjectList"></div></section>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../supabase-config.js"></script>
+<script src="../school-branding.js"></script>
+<script>
+const sb=supabase.createClient(SUPABASE_CONFIG.url,SUPABASE_CONFIG.key);let user=null,school=null,classes=[],sections=[],subjects=[],pendingLogo=null;
+const $=id=>document.getElementById(id);const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function msg(text,error=false){$('message').textContent=text;$('message').style.background=error?'#fff7ed':'#f0fdf4';}
+async function boot(){const r=await sb.auth.getUser();if(r.error||!r.data.user){location.href='../login.html';return}user=r.data.user;await loadSchool()}
+async function loadSchool(){const r=await sb.from('schools').select('*').eq('owner_id',user.id).maybeSingle();if(r.error){msg(r.error.message,true);return}school=r.data;if(!school){const c=await sb.from('schools').insert({owner_id:user.id,name:'',academic_year:'',address:''}).select().single();if(c.error){msg(c.error.message,true);return}school=c.data}$('schoolName').value=school.name||'';$('schoolAddress').value=school.address||'';$('schoolYear').value=school.academic_year||'';if(school.logo_url){$('logoPreview').src=school.logo_url;$('logoPreview').style.display='block'}await loadStructure();msg('Connected. Your school data is stored in Supabase.')}
+async function loadStructure(){const c=await sb.from('classes').select('*').eq('school_id',school.id).order('name');if(c.error){msg(c.error.message,true);return}classes=c.data||[];const ids=classes.map(x=>x.id);sections=ids.length?(await sb.from('sections').select('*').in('class_id',ids)).data||[]:[];subjects=ids.length?(await sb.from('subjects').select('*').in('class_id',ids)).data||:[];fillSelects();render()}
+function fillSelects(){['sectionClass','subjectClass'].forEach(id=>$(id).innerHTML=classes.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join(''))}
+function render(){ $('classList').innerHTML='<table class="table"><tr><th>Class</th><th>Status</th></tr>'+classes.map(c=>`<tr><td>${esc(c.name)}</td><td>${c.archived?'Archived':'Active'}</td></tr>`).join('')+'</table>';$('sectionList').innerHTML='<table class="table"><tr><th>Class</th><th>Sections</th></tr>'+classes.map(c=>`<tr><td>${esc(c.name)}</td><td>${sections.filter(s=>s.class_id===c.id).map(s=>`<span>${esc(s.name)}</span>`).join(', ')}</td></tr>`).join('')+'</table>'; $('subjectList').innerHTML='<table class="table"><tr><th>Class</th><th>Subjects</th></tr>'+classes.map(c=>`<tr><td>${esc(c.name)}</td><td>${subjects.filter(s=>s.class_id===c.id).map(s=>`<span>${esc(s.name)}</span>`).join(', ')}</td></tr>`).join('')+'</table>' }
+$('logoFile').addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;try{pendingLogo=await SchoolBranding.optimizeLogo(f);$('logoPreview').src=URL.createObjectURL(pendingLogo);$('logoPreview').style.display='block';$('logoStatus').textContent=`Ready: ${(pendingLogo.size/1024).toFixed(1)} KB`;}catch(err){pendingLogo=null;e.target.value='';$('logoStatus').textContent=err.message}});
+$('saveBtn').onclick=async()=>{const p={name:$('schoolName').value.trim(),address:$('schoolAddress').value.trim(),academic_year:$('schoolYear').value.trim()};if(!p.name||!p.academic_year)return alert('School name and academic year are required.');const r=await sb.from('schools').update(p).eq('id',school.id);if(r.error)return alert(r.error.message);if(pendingLogo){try{const url=await SchoolBranding.uploadLogo(new File([pendingLogo],'school-logo.webp',{type:'image/webp'}),school.id,school.logo_url);school.logo_url=url;pendingLogo=null}else{catch(err){return alert('Logo upload failed: '+err.message)}}}Object.assign(school,p);$('title').textContent='🏫 '+p.name;$('subtitle').textContent=p.address?`${p.address} • Academic Year ${p.academic_year}`:`Academic Year ${p.academic_year}`;msg('School details saved successfully.')};
+$('addClass').onclick=async()=>{const name=$('className').value.trim();if(!name)return alert('Enter class name.');const r=await sb.from('classes').insert({school_id:school.id,name,archived:false}).select().single();if(r.error)return alert(r.error.message);$('className').value='';await loadStructure()};
+$('addSection').onclick=async()=>{const class_id=$('sectionClass').value,name=$('sectionName').value.trim();if(!class_id||!name)return alert('Select a class and enter a section.');const r=await sb.from('sections').insert({class_id,name,archived:false});if(r.error)return alert(r.error.message);$('sectionName').value='';await loadStructure()};
+$('addSubject').onclick=async()=>{const class_id=$('subjectClass').value,name=$('subjectName').value.trim();if(!class_id||!name)return alert('Select a class and enter a subject.');const r=await sb.from('subjects').insert({class_id,name});if(r.error)return alert(r.error.message);$('subjectName').value='';await loadStructure()};
+boot();
+</script>
+</body></html>
