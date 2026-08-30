@@ -36,14 +36,22 @@ window.SUPABASE_CONFIG = {
 })();
 
 // Load the tested School Branding module in the cloud app.
+// Cache-busting plus a delayed fallback makes the add-on load reliably on GitHub Pages.
 if (location.pathname.endsWith('school-cloud.html')) {
   const loadBranding = () => {
-    if (document.querySelector('script[data-school-branding]')) return;
+    if (window.SchoolBranding || document.querySelector('script[data-school-branding]')) return;
     const script = document.createElement('script');
-    script.src = 'school-branding.js';
+    script.src = 'school-branding.js?v=20260830-0500';
     script.dataset.schoolBranding = 'true';
+    script.async = false;
+    script.onload = () => console.log('School Branding add-on loaded.');
+    script.onerror = () => console.error('School Branding add-on could not be loaded.');
     document.head.appendChild(script);
   };
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', loadBranding);
-  else loadBranding();
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', loadBranding, { once: true });
+    setTimeout(loadBranding, 1500);
+  } else {
+    loadBranding();
+  }
 }
