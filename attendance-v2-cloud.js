@@ -1,0 +1,122 @@
+/* Cloud attendance for School Management V2.
+   Replaces the legacy localStorage attendance UI with Supabase attendance,
+   while leaving the rest of the V2 application unchanged. */
+(function(){
+  const ATT_ID='attendance';
+  const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  let sb=null, school=null, classes=[], currentStudents=[];
+
+  function today(){ return new Date().toISOString().slice(0,10); }
+  function setStatus(text,ok=false){
+    const el=document.getElementById('cloudAttStatus');
+    if(el){el.textContent=text;el.className=ok?'ok cloud-att-status':'warn cloud-att-status';}
+  }
+
+  async function getClient(){
+    if(sb) return sb;
+    if(!window.SUPABASE_CONFIG){
+      await new Promise((resolve,reject)=>{
+        const s=document.createElement('script');
+        s.src='supabase-config.js'; s.onload=resolve; s.onerror=()=>reject(new Error('Could not load Supabase configuration.'));
+        document.head.appendChild(s);
+      });
+    }
+    if(!window.supabase){
+      await new Promise((resolve,reject)=>{
+        const s=document.createElement('script');
+        s.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2'; s.onload=resolve; s.onerror=()=>reject(new Error('Could not load Supabase client.'));
+        document.head.appendChild(s);
+      });
+    }
+    sb=window.supabase.createClient(window.SUPABASE_CONFIG.url,window.SUPABASE_CONFIG.key);
+    return sb;
+  }
+
+  async function loadSchool(){
+    const auth=await sb.auth.getUser();
+    const user=auth.data?.user;
+    if(!user) throw new Error('Please sign in to the school app first.');
+    const r=await sb.from('schools').select('id,name').eq('owner_id',user.id).maybeSingle();
+    if(r.error) throw r.error;
+    if(!r.data) throw new Error('School record not found.');
+    school=r.data;
+  }
+
+  async function loadClasses(){
+    const r=await sb.from('classes').select('id,name').eq('school_id',school.id).eq('archived',false).order('name');
+    if(r.error) throw r.error;
+    classes=r.data||[];
+    const el=document.getElementById('cloudAttClass');
+    el.innerHTML=classes.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
+    await loadSections();
+  }
+
+  async function loadSections(){
+    const cid=document.getElementById('cloudAttClass').value;
+    const el=document.getElementById('cloudAttSection');
+    if(!cid){el.innerHTML='<option value="">All sections</option>';await loadStudents();return;}
+    const r=await sb.from('sections').select('id,name').eq('class_id',cid).eq('archived',false).order('name');
+    if(r.error) throw r.error;
+    el.innerHTML='<option value="">All sections</option>'+(r.data||[]).map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('');
+    await loadStudents();
+  }
+
+  async function loadStudents(){
+    const cid=document.getElementById('cloudAttClass').value;
+    const sid=document.getElementById('cloudAttSection').value;
+    const date=document.getElementById('cloudAttDate').value;
+    if(!cid){currentStudents=[];renderStudents({});return;}
+    let q=sb.from('students').select('id,name,admission_no,section_id').eq('school_id',school.id).eq('class_id',cid).eq('archived',false).order('name');
+    if(sid) q=q.eq('section_id',sid);
+    const r=await q;
+    if(r.error) throw r.error;
+    currentStudents=r.data||[];
+    const a=await sb.from('attendance').select('student_id,status').eq('school_id',school.id).eq('attendance_date',date);
+    if(a.error) throw a.error;
+    const saved=Object.fromEntries((a.data||[]).map(x=>[x.student_id,x.status]));
+    renderStudents(saved);
+    setStatus(`Loaded ${currentStudents.length} student(s) from cloud.` ,true);
+  }
+
+  function renderStudents(saved){
+    const box=document.getElementById('cloudAttTable');
+    if(!currentStudents.length){box.innerHTML='<div class="empty">No active students found for this class/section.</div>';return;}
+    box.innerHTML='<table class="table"><tr><th>#</th><th>Student</th><th>Admission</th><th>Status</th></tr>'+currentStudents.map((s,i)=>`<tr><td>${i+1}</td><td>${esc(s.name)}</td><td>${esc(s.admission_no||'—')}</td><td><select data-cloud-att="${s.id}"><option value="present" ${(saved[s.id]||'present')==='present'?'selected':''}>Present</option><option value="absent" ${saved[s.id]==='absent'?'selected':''}>Absent</option><option value="late" ${saved[s.id]==='late'?'selected':''}>Late</option><option value="leave" ${saved[s.id]==='leave'?'selected':''}>Leave</option></select></td></tr>`).join('')+'</table>';
+  }
+
+  function markAll(status){document.querySelectorAll('[data-cloud-att]').forEach(e=>e.value=status);}
+
+  async function save(){
+    const date=document.getElementById('cloudAttDate').value;
+    if(!date)return setStatus('Please select a date.');
+    const rows=[...document.querySelectorAll('[data-cloud-att]')].map(e=>({school_id:school.id,student_id:e.dataset.cloudAtt,attendance_date:date,status:e.value}));
+    if(!rows.length)return setStatus('There are no students to save.');
+    setStatus('Saving attendance to cloud…');
+    const r=await sb.from('attendance').upsert(rows,{onConflict:'student_id,attendance_date'});
+    if(r.error){setStatus('Save failed: '+r.error.message);return;}
+    setStatus(`Attendance saved successfully to Supabase • ${rows.length} student(s).`,true);
+  }
+
+  async function init(){
+    if(!location.pathname.endsWith('school-management-v2.html')) return;
+    const section=document.getElementById(ATT_ID);
+    if(!section || document.getElementById('cloudAttMount')) return;
+    try{
+      sb=await getClient();
+      await loadSchool();
+      section.innerHTML=`<div class="card" id="cloudAttMount"><h2>📅 Attendance</h2><div class="row"><div class="field"><label>Class</label><select id="cloudAttClass"></select></div><div class="field"><label>Section</label><select id="cloudAttSection"></select></div><div class="field"><label>Date</label><input id="cloudAttDate" type="date" value="${today()}"></div><button class="btn primary" id="cloudAttLoad">Load Attendance</button></div><div class="actions" style="margin-top:10px"><button class="btn" id="cloudAttAllPresent">✓ Mark All Present</button><button class="btn" id="cloudAttAllAbsent">✕ Mark All Absent</button><button class="btn" id="cloudAttSave">☁️ Save Attendance</button></div><div id="cloudAttStatus" class="ok cloud-att-status">Connecting to school cloud…</div><div id="cloudAttTable" style="margin-top:10px"></div></div><div class="card"><h3>☁️ Cloud synchronization</h3><p class="muted">Attendance is stored in the same Supabase school database, so saved attendance can be opened from another signed-in device.</p></div>`;
+      const style=document.createElement('style');style.textContent='.cloud-att-status{margin-top:10px;padding:10px;border-radius:9px}.cloud-att-status.ok{background:#f0fdf4;border:1px solid #bbf7d0;color:#166534}.cloud-att-status.warn{background:#fff7ed;border:1px solid #fed7aa;color:#7c2d12}';document.head.appendChild(style);
+      document.getElementById('cloudAttClass').addEventListener('change',loadSections);
+      document.getElementById('cloudAttSection').addEventListener('change',loadStudents);
+      document.getElementById('cloudAttDate').addEventListener('change',loadStudents);
+      document.getElementById('cloudAttLoad').onclick=loadStudents;
+      document.getElementById('cloudAttAllPresent').onclick=()=>markAll('present');
+      document.getElementById('cloudAttAllAbsent').onclick=()=>markAll('absent');
+      document.getElementById('cloudAttSave').onclick=()=>save().catch(e=>setStatus('Save failed: '+(e.message||e)));
+      await loadClasses();
+    }catch(e){
+      section.innerHTML='<div class="card"><h2>📅 Attendance</h2><div class="warn">Cloud attendance could not initialize: '+esc(e.message||e)+'</div></div>';
+    }
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
+})();
