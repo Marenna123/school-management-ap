@@ -4,7 +4,7 @@ window.SUPABASE_CONFIG = {
 };
 
 // Compatibility fix for optional UUID fields used by the cloud school app.
-// Supabase UUID columns must receive null (not an empty string) when no section is selected.
+// Supabase UUID columns must receive null (not an empty string) when no class/section is selected.
 (() => {
   const originalCreateClient = supabase.createClient;
   supabase.createClient = function (...args) {
@@ -13,13 +13,14 @@ window.SUPABASE_CONFIG = {
 
     client.from = function (table) {
       const builder = originalFrom(table);
-      if (table === 'students' && typeof builder.insert === 'function') {
+      if ((table === 'students' || table === 'teachers') && typeof builder.insert === 'function') {
         const originalInsert = builder.insert.bind(builder);
         builder.insert = function (values, ...rest) {
           const normalize = (value) => {
             if (Array.isArray(value)) return value.map(normalize);
             if (value && typeof value === 'object') {
               const copy = { ...value };
+              if (copy.class_id === '') copy.class_id = null;
               if (copy.section_id === '') copy.section_id = null;
               return copy;
             }
