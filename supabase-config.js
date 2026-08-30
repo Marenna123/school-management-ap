@@ -47,3 +47,17 @@ if (location.pathname.endsWith('school-management-v2.html')) {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', loadBranding);
   else loadBranding();
 }
+
+// School Management Cloud loads the isolated attendance module without modifying
+// the existing school-cloud.html structure or legacy attendance pages.
+if (location.pathname.endsWith('school-cloud.html')) {
+  const loadAttendance = () => {
+    if (document.querySelector('script[data-cloud-attendance]')) return;
+    const script = document.createElement('script');
+    script.src = 'attendance-cloud.js';
+    script.dataset.cloudAttendance = 'true';
+    document.head.appendChild(script);
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', loadAttendance);
+  else loadAttendance();
+}
