@@ -56,4 +56,30 @@
     }catch(e){status.textContent='Branding could not initialize: '+(e.message||e);}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install);else install();
+
+  // Small bridge: keep Attendance in its own module while reusing this already-loaded cloud script.
+  function connectAttendance(){
+    const attendance=document.getElementById('attendance');
+    if(!attendance||document.getElementById('attendanceCloudMount'))return;
+    const card=document.createElement('div'); card.className='card'; card.id='attendanceCloudCard';
+    card.innerHTML='<h2>☁️ Cloud Attendance</h2><div id="attendanceCloudMount"><div class="warn">Loading cloud attendance module…</div></div>';
+    attendance.innerHTML=''; attendance.appendChild(card);
+    const script=document.createElement('script');
+    script.src='attendance-cloud.js?v=1';
+    script.onload=async()=>{
+      try{
+        const client=supabase.createClient(SUPABASE_CONFIG.url,SUPABASE_CONFIG.key);
+        const a=await client.auth.getUser();
+        const s=a.data.user?await client.from('schools').select('id').eq('owner_id',a.data.user.id).maybeSingle():null;
+        if(!s||s.error||!s.data)throw new Error(s?.error?.message||'No school record found.');
+        if(window.AttendanceCloudModule)await window.AttendanceCloudModule.init({supabaseClient:client,schoolId:s.data.id});
+      }catch(e){const m=document.getElementById('attendanceCloudMount');if(m)m.innerHTML='<div class="warn">Attendance could not initialize: '+(e.message||e)+'</div>';}
+    };
+    script.onerror=()=>{const m=document.getElementById('attendanceCloudMount');if(m)m.innerHTML='<div class="warn">Could not load attendance-cloud.js.</div>';};
+    document.body.appendChild(script);
+  }
+  document.addEventListener('click',e=>{
+    const b=e.target.closest('button[onclick*="tab(\'attendance\')"]');
+    if(b)setTimeout(connectAttendance,0);
+  });
 })();
