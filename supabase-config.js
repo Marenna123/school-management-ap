@@ -4,11 +4,13 @@ window.SUPABASE_CONFIG = {
 };
 
 // Compatibility fix for optional UUID fields used by the cloud school app.
+// Supabase UUID columns must receive null (not an empty string) when no class/section is selected.
 (() => {
   const originalCreateClient = supabase.createClient;
   supabase.createClient = function (...args) {
     const client = originalCreateClient.apply(this, args);
     const originalFrom = client.from.bind(client);
+
     client.from = function (table) {
       const builder = originalFrom(table);
       if ((table === 'students' || table === 'teachers') && typeof builder.insert === 'function') {
@@ -33,15 +35,15 @@ window.SUPABASE_CONFIG = {
   };
 })();
 
-// Load the real branding UI in both V2 pages.
-(() => {
+// Load the tested School Branding module in the cloud app.
+if (location.pathname.endsWith('school-cloud.html')) {
   const loadBranding = () => {
     if (document.querySelector('script[data-school-branding]')) return;
     const script = document.createElement('script');
-    script.src = location.pathname.endsWith('school-cloud.html') ? 'school-branding-cloud.js' : 'school-branding.js';
+    script.src = 'school-branding.js';
     script.dataset.schoolBranding = 'true';
     document.head.appendChild(script);
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', loadBranding);
   else loadBranding();
-})();
+}
